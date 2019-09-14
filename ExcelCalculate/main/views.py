@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from random import *
 from .models import *
 from sendEmail.views import *
+import hashlib
 
 # Create your views here.
 def index(request):
@@ -18,7 +19,10 @@ def join(request):
     name = request.POST['signupName']
     email = request.POST['signupEmail']
     pw = request.POST['signupPW']
-    user = User(user_name = name, user_email = email, user_password = pw)
+    # pw encryption
+    encoded_pw = pw.encode()
+    encrypted_pw = hashlib.sha256(encoded_pw).hexdigest()
+    user = User(user_name = name, user_email = email, user_password = encrypted_pw)
     user.save()
     code = randint(1000, 9999)
     response = redirect('main_verifyCode')
@@ -37,13 +41,22 @@ def signin(request):
 def login(request):
     loginEmail = request.POST['loginEmail']
     loginPW = request.POST['loginPW']
-    user = User.objects.get(user_email = loginEmail)
-    if user.user_password == loginPW:
+    try:
+        user = User.objects.get(user_email = loginEmail)
+    except:
+        return redirect('main_loginFail')
+    # 사용자가 입력한 PW 암호화
+    encoded_loginPW = loginPW.encode()
+    encrypted_loginPW = hashlib.sha256(encoded_loginPW).hexdigest()
+    if user.user_password == encrypted_loginPW:
         request.session['user_name'] = user.user_name
         request.session['user_email'] = user.user_email
         return redirect('main_index')
     else:
-        return redirect('main_signin')
+        return redirect('main_loginFail')
+
+def loginFail(request):
+    return render(request, 'main/loginFail.html')
 
 def logout(request):
     del request.session['user_name']
@@ -72,6 +85,11 @@ def verify(request):
 
 def result(request):
     if 'user_name' in request.session.keys():
-        return render(request, 'main/result.html')
+        content = {}
+        content['grade_calculate_dic'] = request.session['grade_calculate_dic']
+        content['email_domain_dic'] = request.session['email_domain_dic']
+        del request.session['grade_calculate_dic']
+        del request.session['email_domain_dic']
+        return render(request, 'main/result.html',content)
     else:
         return redirect('main_signin')
